@@ -10,6 +10,7 @@ export MineField, MFState, MFAction
 export MFStateIter
 export nextState, reward, Generative, isEnd, isFeasible
 export tranProb
+export computeExpectedRewardMap
 
 
 using MDP_
@@ -111,7 +112,6 @@ type MineField <: MDP
     destination::Tuple{Int64, Int64}
 
     Reward::Any
-    expected_reward_map::Union{Array{Int64, 2}, Array{Float64, 2}}
 
     reward_norm_const::Float64
 
@@ -155,8 +155,6 @@ type MineField <: MDP
             self.Reward[self.rover_init_loc...] = FixedValue(0)
             self.Reward[self.destination...] = FixedValue(0)
         end
-
-        self.expected_reward_map = computeExpectedRewardMap(self.Reward)
 
         self.reward_norm_const = 1.
 

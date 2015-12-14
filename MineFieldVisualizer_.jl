@@ -53,7 +53,7 @@ type MineFieldVisualizer <: Visualizer
 end
 
 
-function visInit(mfv::MineFieldVisualizer, mf::MineField, path::Union{Vector{Tuple{Int64, Int64}}, Void} = nothing)
+function visInit(mfv::MineFieldVisualizer, mf::MineField, expected_reward_map::Union{Array{Float64, 2}, Void} = nothing, path::Union{Vector{Tuple{Int64, Int64}}, Void} = nothing)
 
     if mfv.fig == nothing
         fig = figure(facecolor = "white")
@@ -93,11 +93,13 @@ function visInit(mfv::MineFieldVisualizer, mf::MineField, path::Union{Vector{Tup
     dest_marker_text = ax[:text](mf.destination[1], mf.destination[2], "X", size = mfv.cell_size / 4, horizontalalignment = "center", verticalalignment = "center")
     push!(artists, dest_marker_text)
 
-    for i = 1:mf.nx
-        for j = 1:mf.ny
-            if !((i == 1 && j == 1) || (i == mf.nx && j == mf.ny))
-                reward_text = ax[:text](i, j, neat(mf.expected_reward_map[i, j]), size = mfv.cell_size / 8, horizontalalignment = "center", verticalalignment = "center")
-                push!(artists, reward_text)
+    if expected_reward_map != nothing
+        for i = 1:mf.nx
+            for j = 1:mf.ny
+                if !((i == 1 && j == 1) || (i == mf.nx && j == mf.ny))
+                    reward_text = ax[:text](i, j, neat(expected_reward_map[i, j]), size = mfv.cell_size / 8, horizontalalignment = "center", verticalalignment = "center")
+                    push!(artists, reward_text)
+                end
             end
         end
     end

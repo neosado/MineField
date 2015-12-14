@@ -155,8 +155,10 @@ function simulate(pm, alg; draw::Bool = false, wait::Bool = false, debug::Int64 
         println("time: 0, s: ", string(s))
     end
 
+    expected_reward_map = computeExpectedRewardMap(pm.Reward)
+
     if draw
-        visInit(mfv, pm)
+        visInit(mfv, pm, expected_reward_map)
         visUpdate(mfv, pm, ts, s)
         updateAnimation(mfv, ts)
     end
@@ -188,7 +190,7 @@ function simulate(pm, alg; draw::Bool = false, wait::Bool = false, debug::Int64 
         s_, r = Generative(pm, s, a)
 
         push!(path, (s_.x, s_.y))
-        expected_return += pm.expected_reward_map[s_.x, s_.y]
+        expected_return += expected_reward_map[s_.x, s_.y]
 
         R += r
 
@@ -208,7 +210,7 @@ function simulate(pm, alg; draw::Bool = false, wait::Bool = false, debug::Int64 
         end
 
         if draw
-            visInit(mfv, pm, path)
+            visInit(mfv, pm, expected_reward_map, path)
             visUpdate(mfv, pm, ts, s_, a, neat(r), neat(R), neat(expected_return))
             updateAnimation(mfv, ts)
         end
@@ -263,43 +265,83 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
 end
 
 
-nx = 7
-ny = 5
+function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_seed::Union{Int64, Vector{Int64}}, tree_policy::Any, N::Int64; nx::Int64 = 5, ny::Int64 = 5, nloop_min::Int64 = 100, nloop_max::Int64 = 1000, bParallel::Bool = false, id::Any = nothing)
 
-reward_seed = 23
-mf_seed = round(Int64, time())
-mcts_seed = round(Int64, time())
+    @assert length(mf_seed) == N
+    @assert length(mcts_seed) == N
 
+    expected_returns = zeros(N)
 
-println("nx: ", nx, ", ny: ", ny)
-println("seed: ", reward_seed, ", ", mf_seed, ", ", mcts_seed)
-println()
+    Reward = generateRewardMap(nx, ny, seed = reward_seed)
 
-pm = MineField(nx, ny, seed = mf_seed, Reward = generateRewardMap(nx, ny, seed = reward_seed))
+    expected_reward_map = computeExpectedRewardMap(Reward)
+    distance, path = computeShortestPath(-expected_reward_map, (1, 1), (nx, ny))
 
-println("Reward Map: ")
-println(neat(rotl90(pm.expected_reward_map)))
+    for i = 1:N
+        pm = MineField(nx, ny, seed = mf_seed[i], Reward = Reward)
 
-distance, path = computeShortestPath(-pm.expected_reward_map, pm.rover_init_loc, pm.destination)
+        alg = UCT(seed = mcts_seed[i], depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = tree_policy)
 
-println("Optimal Path: ", path)
-println("Maximum Return: ", neat(-distance))
-println()
+        R, actions, path, expected_return = simulate(pm, alg)
 
-alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = Dict("type" => :UCB1, "c" => 300), visualizer = MCTSVisualizer())
+        expected_returns[i] = expected_return
+    end
 
-#test(pm, alg)
+    if N == 1
+        expected_returns = expected_returns[1]
+    end
 
-R, actions, path, expected_return = simulate(pm, alg, draw = true, wait = true, debug = 2)
-
-actions_ = Array(Symbol, nx + ny - 2)
-for i = 1:(nx + ny - 2)
-    actions_[i] = actions[i].action
+    if bParallel
+        return id, -distance, expected_returns
+    else
+        return -distance, expected_returns
+    end
 end
 
-println("Actions: ", actions_)
-println("Path: ", path)
-println("Expected Return: ", neat(expected_return))
-println("Actual Return: ", neat(R))
+
+if false
+    nx = 7
+    ny = 5
+
+    reward_seed = 23
+    mf_seed = round(Int64, time())
+    mcts_seed = round(Int64, time())
+
+
+    println("nx: ", nx, ", ny: ", ny)
+    println("seed: ", reward_seed, ", ", mf_seed, ", ", mcts_seed)
+    println()
+
+    Reward = generateRewardMap(nx, ny, seed = reward_seed)
+
+    pm = MineField(nx, ny, seed = mf_seed, Reward = Reward)
+
+    expected_reward_map = computeExpectedRewardMap(Reward)
+
+    println("Reward Map: ")
+    println(neat(rotl90(expected_reward_map)))
+
+    distance, path = computeShortestPath(-expected_reward_map, pm.rover_init_loc, pm.destination)
+
+    println("Optimal Path: ", path)
+    println("Maximum Return: ", neat(-distance))
+    println()
+
+    alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = Dict("type" => :UCB1, "c" => 300), visualizer = MCTSVisualizer())
+
+    #test(pm, alg)
+
+    R, actions, path, expected_return = simulate(pm, alg, draw = true, wait = true, debug = 2)
+
+    actions_ = Array(Symbol, nx + ny - 2)
+    for i = 1:(nx + ny - 2)
+        actions_[i] = actions[i].action
+    end
+
+    println("Actions: ", actions_)
+    println("Path: ", path)
+    println("Expected Return: ", neat(expected_return))
+    println("Actual Return: ", neat(R))
+end
 
 

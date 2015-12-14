@@ -9,6 +9,8 @@ export MineFieldVisualizer, visInit, visUpdate, updateAnimation, saveAnimation
 using Visualizer_
 using MineField_
 
+using Util
+
 using PyCall
 using PyPlot
 
@@ -51,7 +53,7 @@ type MineFieldVisualizer <: Visualizer
 end
 
 
-function visInit(mfv::MineFieldVisualizer, mf::MineField)
+function visInit(mfv::MineFieldVisualizer, mf::MineField, path::Union{Vector{Tuple{Int64, Int64}}, Void} = nothing)
 
     if mfv.fig == nothing
         fig = figure(facecolor = "white")
@@ -91,6 +93,20 @@ function visInit(mfv::MineFieldVisualizer, mf::MineField)
     dest_marker_text = ax[:text](mf.destination[1], mf.destination[2], "X", size = mfv.cell_size / 4, horizontalalignment = "center", verticalalignment = "center")
     push!(artists, dest_marker_text)
 
+    for i = 1:mf.nx
+        for j = 1:mf.ny
+            if !((i == 1 && j == 1) || (i == mf.nx && j == mf.ny))
+                reward_text = ax[:text](i, j, neat(mf.expected_reward_map[i, j]), size = mfv.cell_size / 8, horizontalalignment = "center", verticalalignment = "center")
+                push!(artists, reward_text)
+            end
+        end
+    end
+
+    if path != nothing
+        rover_path = ax[:plot](map(x -> x[1], path), map(x -> x[2], path), "r")
+        append!(artists, rover_path)
+    end
+
     fig[:canvas][:draw]()
 
     mfv.artists = artists
@@ -99,20 +115,20 @@ function visInit(mfv::MineFieldVisualizer, mf::MineField)
 end
 
 
-function visUpdate(mfv::MineFieldVisualizer, mf::MineField, ts::Union{Int64, Void} = nothing, s::Union{MFState, Void} = nothing, a::Union{MFAction, Void} = nothing, r::Union{Int64, Float64} = 0, R::Union{Int64, Float64} = 0)
+function visUpdate(mfv::MineFieldVisualizer, mf::MineField, ts::Union{Int64, Void} = nothing, s::Union{MFState, Void} = nothing, a::Union{MFAction, Void} = nothing, r::Union{Int64, Float64} = 0, R::Union{Int64, Float64} = 0, ER::Union{Int64, Float64} = 0)
 
     fig = mfv.fig
     ax = mfv.ax
 
     if ts == nothing
-        text = ax[:text](0.5, -0.02, "$(mf.nx) x $(mf.ny), seed: $(mf.seed)", horizontalalignment = "center", verticalalignment = "top", transform = ax[:transAxes])
+        text = ax[:text](0.5, -0.02, "$(mf.nx) x $(mf.ny)", horizontalalignment = "center", verticalalignment = "top", transform = ax[:transAxes])
         push!(mfv.artists, text)
     else
         if ts == 0
             text = ax[:text](0.5, -0.02, "timestep: 0, reward: 0, total reward: 0", horizontalalignment = "center", verticalalignment = "top", transform = ax[:transAxes])
         else
             action = string(a)
-            text = ax[:text](0.5, -0.02, "timestep: $ts, action: $action, reward: $r, total reward: $R", horizontalalignment = "center", verticalalignment = "top", transform = ax[:transAxes])
+            text = ax[:text](0.5, -0.02, "timestep: $ts, action: $action, reward: $r, total reward: $R, ER: $ER", horizontalalignment = "center", verticalalignment = "top", transform = ax[:transAxes])
         end
         push!(mfv.artists, text)
 

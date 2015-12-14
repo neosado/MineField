@@ -133,7 +133,7 @@ function test(pm, alg)
 end
 
 
-function simulate(pm, alg; draw::Bool = true, wait::Bool = false, debug::Int64 = 0)
+function simulate(pm, alg; draw::Bool = false, wait::Bool = false, debug::Int64 = 0)
 
     if draw
         mfv = MineFieldVisualizer(wait = wait)
@@ -162,6 +162,9 @@ function simulate(pm, alg; draw::Bool = true, wait::Bool = false, debug::Int64 =
     end
 
     actions = Array(Action, pm.nx + pm.ny - 2)
+    path = Tuple{Int64, Int64}[]
+    push!(path, (s.x, s.y))
+    expected_return = 0
 
     while true
         ts += 1
@@ -184,6 +187,9 @@ function simulate(pm, alg; draw::Bool = true, wait::Bool = false, debug::Int64 =
 
         s_, r = Generative(pm, s, a)
 
+        push!(path, (s_.x, s_.y))
+        expected_return += pm.expected_reward_map[s_.x, s_.y]
+
         R += r
 
         if debug > 0
@@ -198,12 +204,12 @@ function simulate(pm, alg; draw::Bool = true, wait::Bool = false, debug::Int64 =
                 push!(Q__, Q[a__])
             end
 
-            println("time: ", ts, ", s: ", string(s), ", Q: ", neat(Q__), ", a: ", string(a), ", r: ", neat(r), ", R: ", neat(R), ", s_: ", string(s_))
+            println("time: ", ts, ", s: ", string(s), ", Q: ", neat(Q__), ", a: ", string(a), ", r: ", neat(r), ", R: ", neat(R), ", ER: ", neat(expected_return), ", s_: ", string(s_))
         end
 
         if draw
-            visInit(mfv, pm)
-            visUpdate(mfv, pm, ts, s_, a, neat(r), neat(R))
+            visInit(mfv, pm, path)
+            visUpdate(mfv, pm, ts, s_, a, neat(r), neat(R), neat(expected_return))
             updateAnimation(mfv, ts)
         end
 
@@ -222,7 +228,7 @@ function simulate(pm, alg; draw::Bool = true, wait::Bool = false, debug::Int64 =
         saveAnimation(mfv, repeat = true)
     end
 
-    return R, actions
+    return R, actions, path, expected_return
 end
 
 
@@ -232,28 +238,26 @@ end
 
 function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = nothing)
 
-    if seed != nothing
-        if seed != 0
-            srand(seed)
-        else
-            srand(round(Int64, time()))
-        end
+    if seed == nothing
+        seed = round(Int64, time())
     end
 
-    Reward = Array(RareDist, nx, ny)
+    rng = MersenneTwister(seed)
+
+    Reward = Array(Union{RareDist, FixedValue}, nx, ny)
 
     for i = 1:nx
         for j = 1:ny
-            p = rand() / 5
-            mu = -10 - 40 * rand()
-            sigma = 1 + 4 * rand()
+            p = rand(rng) / 5  # 0. ~ 0.2
+            mu = -10 - 40 * rand(rng)
+            sigma = 1 + 4 * rand(rng)
 
             Reward[i, j] = RareDist(p, -1000., Truncated(Normal(mu, sigma), -Inf, -1))
         end
     end
 
-    Reward[1, 1]= RareDist(1., 0., Normal())
-    Reward[nx, ny] = RareDist(1., 0., Normal())
+    Reward[1, 1]= FixedValue(0.)
+    Reward[nx, ny] = FixedValue(0.)
 
     return Reward
 end
@@ -273,38 +277,24 @@ println()
 
 pm = MineField(nx, ny, seed = mf_seed, Reward = generateRewardMap(nx, ny, seed = reward_seed))
 
-RM = computeRewardMap(pm)
 println("Reward Map: ")
-println(neat(rotl90(RM)))
+println(neat(rotl90(pm.expected_reward_map)))
 
-distance, path = computeShortestPath(-RM, pm.rover_init_loc, pm.destination)
+distance, path = computeShortestPath(-pm.expected_reward_map, pm.rover_init_loc, pm.destination)
 
 println("Optimal Path: ", path)
 println("Maximum Return: ", neat(-distance))
 println()
 
-#alg = UCT(depth = 5, nloop_max = 10000, nloop_min = 1000, visualizer = MCTSVisualizer())
-alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100)
+alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = Dict("type" => :UCB1, "c" => 300), visualizer = MCTSVisualizer())
 
 #test(pm, alg)
 
-R, actions = simulate(pm, alg, draw = false, wait = false, debug = 2)
+R, actions, path, expected_return = simulate(pm, alg, draw = true, wait = true, debug = 2)
 
 actions_ = Array(Symbol, nx + ny - 2)
-path = Array(Tuple{Int64, Int64}, nx + ny - 1)
-expected_return = 0
-
-path[1] = (1, 1)
 for i = 1:(nx + ny - 2)
     actions_[i] = actions[i].action
-
-    if actions_[i] == :up
-        path[i + 1] = (path[i][1], path[i][2] + 1)
-    elseif actions_[i] == :right
-        path[i + 1] = (path[i][1] + 1, path[i][2])
-    end
-
-    expected_return += RM[path[i + 1]...]
 end
 
 println("Actions: ", actions_)

@@ -40,25 +40,16 @@ type TreePolicy
             self.bUCB1 = true
             self.c = sqrt(2)
 
-        else
-            if typeof(tree_policy) <: Dict
-                tree_policy = Any[tree_policy]
-            end
+        elseif tree_policy["type"] == :UCB1
+            self.bUCB1 = true
+            self.c = tree_policy["c"]
 
-            for tree_policy_ in tree_policy
-                if tree_policy_["type"] == :UCB1
-                    self.bUCB1 = true
-                    self.c = tree_policy_["c"]
+        elseif tree_policy["type"] == :UCB1_tuned
+            self.bUCB1_tuned = true
 
-                elseif tree_policy_["type"] == :UCB1_tuned
-                    self.bUCB1_tuned = true
-
-                elseif tree_policy_["type"] == :UCB_V
-                    self.bUCB_V = true
-                    self.uv_c = tree_policy_["c"]
-
-                end
-            end
+        elseif tree_policy["type"] == :UCB_V
+            self.bUCB_V = true
+            self.uv_c = tree_policy["c"]
 
         end
 
@@ -70,16 +61,16 @@ end
 type UCT <: MCTS
 
     seed::Union{Int64, Void}
+    rng::AbstractRNG
 
     depth::Int64
 
     Generative::Function
 
     T::Dict{State, Bool}
-    N::Dict{Tuple{State, Action}, Int64}
     Ns::Dict{State, Int64}
+    N::Dict{Tuple{State, Action}, Int64}
     Q::Dict{Tuple{State, Action}, Float64}
-
     X2::Dict{Tuple{State, Action}, Float64}
 
     nloop_max::Int64
@@ -104,27 +95,21 @@ type UCT <: MCTS
 
         self = new()
 
-        if seed != nothing
-            if seed != 0
-                self.seed = seed
-            else
-                self.seed = round(Int64, time())
-            end
-
-            srand(self.seed)
-
+        if seed == nothing
+            self.seed = round(Int64, time())
         else
-            self.seed = nothing
-
+            self.seed = seed
         end
+
+        self.rng = MersenneTwister(self.seed)
 
         self.depth = depth
 
         self.Generative = Generative
 
         self.T = Dict{State, Bool}()
-        self.N = Dict{Tuple{State, Action}, Int64}()
         self.Ns = Dict{State, Int64}()
+        self.N = Dict{Tuple{State, Action}, Int64}()
         self.Q = Dict{Tuple{State, Action}, Float64}()
 
         self.X2 = Dict{Tuple{State, Action}, Float64}()
@@ -151,14 +136,6 @@ type UCT <: MCTS
 
         self.visualizer = visualizer
 
-        if self.visualizer != nothing
-            if self.bReuse
-                self.visualizer.b_hist_acc = true
-            else
-                self.visualizer.b_hist_acc = false
-            end
-        end
-
         return self
     end
 end
@@ -174,6 +151,8 @@ end
 
 function default_policy(pm::MDP, s::State)
     
+    # Note: pass pm.rng to rand() if pm supports rng
+
     a = pm.actions[rand(1:pm.nActions)]
 
     while !isFeasible(pm, s, a)
@@ -184,27 +163,21 @@ function default_policy(pm::MDP, s::State)
 end
 
 
-function rollout_default(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
+function rollout_default(alg::UCT, pm::MDP, s::State, d::Int64; rgamma::Float64 = 0.9, debug::Int64 = 0)
 
-    rgamma_ = 0.9
-
-    if d == 0
+    if d == 0 || isEnd(pm, s)
         return 0
     end
 
     a = default_policy(pm, s)
 
     if debug > 2
-        print(a, ", ")
+        print(string(a), ", ")
     end
 
     s_, r = alg.Generative(pm, s, a)
 
-    if isEnd(pm, s_)
-        return r
-    end
-
-    return r + rgamma_ * rollout_default(alg, pm, s_, d - 1, debug = debug)
+    return r + rgamma * rollout_default(alg, pm, s_, d - 1, rgamma = rgamma, debug = debug)
 end
 
 
@@ -214,28 +187,30 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
         updateTree(alg.visualizer, :start_sim, s)
     end
 
-    if d == 0 || isEnd(pm, s)
+    bEnd = isEnd(pm, s)
+
+    if d == 0 || bEnd
         if !haskey(alg.T, s)
-            for a in pm.actions
-                alg.N[(s, a)] = 0
+            if !bEnd
+                for a in pm.actions
+                    alg.N[(s, a)] = 0
 
-                if isFeasible(pm, s, a)
-                    alg.Q[(s, a)] = 0
-                else
-                    alg.Q[(s, a)] = -Inf
+                    if isFeasible(pm, s, a)
+                        alg.Q[(s, a)] = 0
+                    else
+                        alg.Q[(s, a)] = -Inf
+                    end
+
+                    alg.X2[(s, a)] = 0
                 end
-
-                alg.X2[(s, a)] = 0
             end
 
-            alg.Ns[s] = 1
             alg.T[s] = true
+            alg.Ns[s] = 0
         end
 
-        if debug > 2
-            if d != 0
-                println("    hit end")
-            end
+        if bEnd && debug > 2
+            println("    hit end")
         end
 
         return 0
@@ -258,8 +233,8 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
             alg.X2[(s, a)] = 0
         end
 
-        alg.Ns[s] = 1
         alg.T[s] = true
+        alg.Ns[s] = 0
 
         ro = alg.rollout_func(alg, pm, s, d, debug = debug)
 
@@ -300,7 +275,7 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
                     if abs(var_[i]) < 1.e-7
                         var_[i] = 0.
                     end
-                    @assert var_[i] >= 0
+                    @assert var_[i] >= 0.
                     RE[i] = sqrt(var_[i]) / abs(alg.Q[(s, a)])
                 end
 
@@ -313,6 +288,7 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
                 end
 
             end
+
         end
     end
 
@@ -340,13 +316,13 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
     q = r + alg.gamma_ * simulate(alg, pm, s_, d - 1, debug = debug)
 
-    alg.N[(s, a)] += 1
     alg.Ns[s] += 1
+    alg.N[(s, a)] += 1
     alg.Q[(s, a)] += (q - alg.Q[(s, a)]) / alg.N[(s, a)]
     alg.X2[(s, a)] += q * q
 
     if alg.visualizer != nothing
-        updateTree(alg.visualizer, :after_sim, s, a, r * pm.reward_norm_const, q * pm.reward_norm_const, alg.N[(s, a)], alg.Ns[s], alg.Q[(s, a)] * pm.reward_norm_const)
+        updateTree(alg.visualizer, :after_sim, s, a, r * pm.reward_norm_const, q * pm.reward_norm_const, alg.Ns[s], alg.N[(s, a)], alg.Q[(s, a)] * pm.reward_norm_const)
     end
 
     return q
@@ -388,8 +364,8 @@ function selectAction(alg::UCT, pm::MDP, s::State; debug::Int64 = 0)
 
         #println("h: ", h)
         #println("T: ", alg.T)
-        #println("N: ", alg.N)
         #println("Ns: ", alg.Ns)
+        #println("N: ", alg.N)
         #println("Q: ", alg.Q)
         #println()
 
@@ -432,7 +408,7 @@ function selectAction(alg::UCT, pm::MDP, s::State; debug::Int64 = 0)
             push!(actions, a)
         end
     end
-    action = actions[rand(1:length(actions))]
+    action = actions[randi(alg.rng, 1:length(actions))]
 
     if alg.visualizer != nothing
         saveTree(alg.visualizer, pm)
@@ -445,8 +421,8 @@ end
 function initialize(alg::UCT)
 
     alg.T = Dict{State, Bool}()
-    alg.N = Dict{Tuple{State, Action}, Int64}()
     alg.Ns = Dict{State, Int64}()
+    alg.N = Dict{Tuple{State, Action}, Int64}()
     alg.Q = Dict{Tuple{State, Action}, Float64}()
     alg.X2 = Dict{Tuple{State, Action}, Float64}()
 end

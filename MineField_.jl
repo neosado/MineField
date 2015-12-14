@@ -10,7 +10,6 @@ export MineField, MFState, MFAction
 export MFStateIter
 export nextState, reward, Generative, isEnd, isFeasible
 export tranProb
-export computeRewardMap
 
 
 using MDP_
@@ -111,28 +110,24 @@ type MineField <: MDP
 
     destination::Tuple{Int64, Int64}
 
-    Reward::Union{Array{DiscreteUnivariateDistribution, 2}, Array{ContinuousUnivariateDistribution, 2}, Array{FixedValue, 2}, Array{RareDist, 2}}
+    Reward::Any
+    expected_reward_map::Union{Array{Int64, 2}, Array{Float64, 2}}
 
     reward_norm_const::Float64
 
 
-    function MineField(nx::Int64, ny::Int64; seed::Union{Int64, Void} = nothing, Reward::Union{Array{DiscreteUnivariateDistribution, 2}, Array{ContinuousUnivariateDistribution, 2}, Array{FixedValue, 2}, Array{RareDist, 2}, Void} = nothing)
+    function MineField(nx::Int64, ny::Int64; seed::Union{Int64, Void} = nothing, Reward::Any = nothing)
 
         self = new()
 
-        if seed != nothing
-            if seed != 0
-                self.seed = seed
-            else
-                self.seed = round(Int64, time())
-            end
-
-            srand(self.seed)
-
+        if seed == nothing
+            self.seed = round(Int64, time())
         else
-            self.seed = nothing
-
+            self.seed = seed
         end
+
+        # Note: can't create rng since Distributions.jl does not support rng argument in its rand()
+        srand(self.seed)
 
         self.nx = nx
         self.ny = ny
@@ -140,7 +135,6 @@ type MineField <: MDP
         self.states = MFStateIter(nx, ny)
         self.nStates = nx * ny
 
-        #self.actions = [MFAction(:up), MFAction(:down), MFAction(:left), MFAction(:right)]
         self.actions = [MFAction(:up), MFAction(:right)]
         self.nActions = length(self.actions)
 
@@ -162,10 +156,28 @@ type MineField <: MDP
             self.Reward[self.destination...] = FixedValue(0)
         end
 
+        self.expected_reward_map = computeExpectedRewardMap(self.Reward)
+
         self.reward_norm_const = 1.
 
         return self
     end
+end
+
+
+function computeExpectedRewardMap(Reward)
+
+    nx, ny = size(Reward)
+
+    R = zeros(Float64, nx, ny)
+
+    for i = 1:nx
+        for j = 1:ny
+            R[i, j] = mean(Reward[i, j])
+        end
+    end
+
+    return R
 end
 
 
@@ -264,20 +276,6 @@ function reward(mf::MineField, s::MFState, a::MFAction, s_::MFState)
     r = rand(mf.Reward[s_.x, s_.y])
 
     return r
-end
-
-
-function computeRewardMap(mf::MineField)
-
-    R = zeros(Float64, mf.nx, mf.ny)
-
-    for i = 1:mf.nx
-        for j = 1:mf.ny
-            R[i, j] = mean(mf.Reward[i, j])
-        end
-    end
-
-    return R
 end
 
 

@@ -12,6 +12,7 @@ using MineFieldVisualizer_
 using MCTSVisualizer_
 
 using Dist_
+using ArmRewardModel_
 using Util
 
 using Distributions
@@ -254,7 +255,7 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
             mu = -10 - 40 * rand(rng)
             sigma = 1 + 4 * rand(rng)
 
-            Reward[i, j] = RareDist(p, -1000., Truncated(Normal(mu, sigma), -Inf, -1))
+            Reward[i, j] = RareDist(p, -1000., Truncated(Normal(mu, sigma), mu - 5 * sigma, min(mu + 5 * sigma, -1.)))
         end
     end
 
@@ -299,7 +300,7 @@ function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_s
 end
 
 
-if false
+if true
     nx = 7
     ny = 5
 
@@ -327,11 +328,18 @@ if false
     println("Maximum Return: ", neat(-distance))
     println()
 
-    alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = Dict("type" => :UCB1, "c" => 300), visualizer = MCTSVisualizer())
+    #tree_policy = Dict("type" => :UCB1, "c" => 300.)
+    #tree_policy = Dict("type" => :UCB1_, "c" => 300.)
+    #tree_policy = Dict("type" => :TS)
+    #tree_policy = Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001))
+    tree_policy = Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.),Dict("type" => :UCB1, "c" => 300.)])
+
+    alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = tree_policy, visualizer = MCTSVisualizer())
 
     #test(pm, alg)
 
-    R, actions, path, expected_return = simulate(pm, alg, draw = true, wait = true, debug = 2)
+    #R, actions, path, expected_return = simulate(pm, alg, draw = true, wait = true, debug = 2)
+    R, actions, path, expected_return = simulate(pm, alg, draw = false, wait = true, debug = 2)
 
     actions_ = Array(Symbol, nx + ny - 2)
     for i = 1:(nx + ny - 2)

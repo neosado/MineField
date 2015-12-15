@@ -113,6 +113,9 @@ type MineField <: MDP
 
     Reward::Any
 
+    reward_min::Float64
+    reward_max::Float64
+
     reward_norm_const::Float64
 
 
@@ -155,6 +158,9 @@ type MineField <: MDP
             self.Reward[self.rover_init_loc...] = FixedValue(0)
             self.Reward[self.destination...] = FixedValue(0)
         end
+
+        self.reward_min = minimum([minimum(self.Reward[i, j]) for i = 1:nx, j = 1:ny])
+        self.reward_max = maximum([maximum(self.Reward[i, j]) for i = 1:nx, j = 1:ny])
 
         self.reward_norm_const = 1.
 

@@ -165,7 +165,7 @@ type TSMPolicy <: TreePolicy
     ARM::Dict{Action, ArmRewardModel}
     
 
-    function TSMPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}, genArmRewardModel::Function)
+    function TSMPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}, arm_reward_model::Function)
 
         self = new()
 
@@ -174,7 +174,7 @@ type TSMPolicy <: TreePolicy
         self.ARM = Dict{Action, ArmRewardModel}()
 
         for a in pm.actions
-            self.ARM[a] = genArmRewardModel()
+            self.ARM[a] = arm_reward_model()
         end
         
         return self

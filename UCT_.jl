@@ -34,7 +34,7 @@ type TreePolicyParams
     bTS::Bool
 
     bTSM::Bool
-    genArmRewardModel::Function
+    arm_reward_model::Function
 
     bAUCB::Bool
     subpolicies::Vector{Dict{ASCIIString, Any}}
@@ -51,10 +51,9 @@ type TreePolicyParams
 
         self.bUCBLike = false
 
+        self.bUCB1_ = false
         self.bTS = false
-
         self.bTSM = false
-
         self.bAUCB = false
 
         if tree_policy == nothing
@@ -98,7 +97,7 @@ type TreePolicyParams
 
         elseif tree_policy["type"] == :TSM
             self.bTSM = true
-            self.genArmRewardModel = tree_policy["ARM"]
+            self.arm_reward_model = tree_policy["ARM"]
 
         elseif tree_policy["type"] == :AUCB
             self.bAUCB = true
@@ -286,7 +285,7 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
                     elseif alg.tree_policy.bTS
                         alg.TP[s] = TSPolicy(pm, feasible_actions)
                     elseif alg.tree_policy.bTSM
-                        alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.genArmRewardModel)
+                        alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.arm_reward_model)
                     elseif alg.tree_policy.bAUCB
                         alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy)
                     end
@@ -337,7 +336,7 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
             elseif alg.tree_policy.bTS
                 alg.TP[s] = TSPolicy(pm, feasible_actions)
             elseif alg.tree_policy.bTSM
-                alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.genArmRewardModel)
+                alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.arm_reward_model)
             elseif alg.tree_policy.bAUCB
                 alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy)
             end

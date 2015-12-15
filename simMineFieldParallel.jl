@@ -1,5 +1,8 @@
 using JSON
 
+push!(LOAD_PATH, ".")
+using ArmRewardModel_
+
 
 function init_cluster(parallel::Symbol = :local_)
 
@@ -37,9 +40,9 @@ function runExpParallel(bParallel::Bool = false)
     mf_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
     mcts_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
 
-    tree_policies = Dict{ASCIIString,Any}[Dict("type" => :UCB1, "c" => 1), Dict("type" => :UCB1, "c" => 300)]
+    tree_policies = Dict{ASCIIString, Any}[Dict("type" => :UCB1, "c" => 1), Dict("type" => :UCB1, "c" => 300), Dict("type" => :TS), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001)), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.)])]
 
-    D = Dict{Dict{ASCIIString,Any},Dict{ASCIIString,Any}}()
+    D = Dict{Dict{ASCIIString, Any}, Dict{ASCIIString, Any}}()
 
     if bParallel
         if true

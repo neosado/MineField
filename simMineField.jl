@@ -311,6 +311,9 @@ function runExpBatch(; bParallel::Bool = false)
 
     tree_policies = Dict{ASCIIString, Any}[Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.), Dict("type" => :TS), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001)), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.)])]
 
+    nloop_max = 1000000
+    nloop_min = 100
+
     N = 100
 
 
@@ -329,7 +332,7 @@ function runExpBatch(; bParallel::Bool = false)
         if bParallel
             if true
                 for tree_policy in tree_policies
-                    results = pmap(id -> runExp(scenario, mf_seed_list[id], mcts_seed_list[id], tree_policy, 1, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100, bParallel = true, id = id), 1:N)
+                    results = pmap(id -> runExp(scenario, mf_seed_list[id], mcts_seed_list[id], tree_policy, 1, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min, bParallel = true, id = id), 1:N)
 
                     opt_dist = 0
                     expected_returns = zeros(N)
@@ -344,7 +347,7 @@ function runExpBatch(; bParallel::Bool = false)
                 end
 
             else
-                results = pmap(tree_policy -> runExp(scenario, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100, bParallel = true, id = tree_policy), tree_policies)
+                results = pmap(tree_policy -> runExp(scenario, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min, bParallel = true, id = tree_policy), tree_policies)
 
                 for result in results
                     tree_policy = result[1]
@@ -358,7 +361,7 @@ function runExpBatch(; bParallel::Bool = false)
 
         else
             for tree_policy in tree_policies
-                opt_dist, expected_returns = runExp(scenario, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100)
+                opt_dist, expected_returns = runExp(scenario, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min)
                 D[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
             end
 

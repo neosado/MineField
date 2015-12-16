@@ -1,7 +1,6 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 12/14/2015
 
-
 module ArmRewardModel_
 
 export ArmRewardModel, sampleFromArmRewardModel, updateArmRewardModel

@@ -1,7 +1,6 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 12/14/2015
 
-
 function init_cluster(parallel::Symbol = :local_)
 
     ncpu_local = CPU_CORES / 2

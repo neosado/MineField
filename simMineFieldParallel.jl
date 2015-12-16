@@ -28,6 +28,6 @@ end
 init_cluster()
 @everywhere include("simMineField.jl")
 
-runExpParallel(bParallel = true)
+runExpBatch(bParallel = true)
 
 

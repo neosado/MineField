@@ -1,6 +1,9 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 12/12/2015
 
+VERSION >= v"0.4" && __precompile__(false)
+
+
 module MCTSVisualizer_
 
 export MCTSVisualizer, initTree, updateTree, saveTree

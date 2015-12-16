@@ -1,7 +1,5 @@
-using JSON
-
-push!(LOAD_PATH, ".")
-using ArmRewardModel_
+# Author: Youngjun Kim, youngjun@stanford.edu
+# Date: 12/14/2015
 
 
 function init_cluster(parallel::Symbol = :local_)
@@ -27,74 +25,9 @@ function init_cluster(parallel::Symbol = :local_)
 end
 
 
-function runExpParallel(bParallel::Bool = false)
+init_cluster()
+@everywhere include("simMineField.jl")
 
-    N = 100
-
-    nx = 7
-    ny = 5
-
-    srand(12)
-
-    reward_seed = rand(10000:typemax(Int16))
-    mf_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
-    mcts_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
-
-    tree_policies = Dict{ASCIIString, Any}[Dict("type" => :UCB1, "c" => 1), Dict("type" => :UCB1, "c" => 300), Dict("type" => :TS), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001)), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.)])]
-
-    D = Dict{Dict{ASCIIString, Any}, Dict{ASCIIString, Any}}()
-
-    if bParallel
-        if true
-            for tree_policy in tree_policies
-                results = pmap(id -> runExp(reward_seed, mf_seed_list[id], mcts_seed_list[id], tree_policy, 1, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100, bParallel = true, id = id), 1:N)
-
-                opt_dist = 0
-                expected_returns = zeros(N)
-
-                for result in results
-                    id = result[1]
-                    opt_dist = result[2]
-                    expected_returns[id] = result[3]
-                end
-
-                D[tree_policy] = Dict("reward_seed" => reward_seed, "mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
-            end
-
-        else
-            results = pmap(tree_policy -> runExp(reward_seed, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100, bParallel = true, id = tree_policy), tree_policies)
-
-            for result in results
-                tree_policy = result[1]
-                opt_dist = result[2]
-                expected_returns = result[3]
-
-                D[tree_policy] = Dict("reward_seed" => reward_seed, "mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
-            end
-
-        end
-
-    else
-        for tree_policy in tree_policies
-            opt_dist, expected_returns = runExp(reward_seed, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = 1000000, nloop_min = 100)
-            D[tree_policy] = Dict("reward_seed" => reward_seed, "mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
-        end
-
-    end
-
-    f = open("exp.json", "w")
-    JSON.print(f, D)
-    close(f)
-end
-
-
-bParallel = true
-
-if bParallel
-    init_cluster()
-    @everywhere include("simMineField.jl")
-end
-
-runExpParallel(bParallel)
+runExpParallel(bParallel = true)
 
 

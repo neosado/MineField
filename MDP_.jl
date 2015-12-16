@@ -1,6 +1,9 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 10/15/2015
 
+VERSION >= v"0.4" && __precompile__(false)
+
+
 # Markov Decision Process
 module MDP_
 

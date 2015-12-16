@@ -1,6 +1,9 @@
 # Author: Youngjun Kim, youngjun@stanford.edu
 # Date: 10/15/2015
 
+VERSION >= v"0.4" && __precompile__(false)
+
+
 module MineField_
 
 import Base: isequal, ==, hash, copy, string
@@ -21,6 +24,7 @@ using Base.Test
 
 
 import MDP_: nextState, reward, Generative, isEnd, isFeasible, tranProb
+import MDP_: MDP, State, Action
 
 
 immutable MFState <: State

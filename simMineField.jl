@@ -327,7 +327,7 @@ function runExpBatch(; bParallel::Bool = false)
         mf_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
         mcts_seed_list = unique(rand(10000:typemax(Int16), round(Int64, N * 1.1)))[1:N]
 
-        D = Dict{Tuple{Int64, Dict{ASCIIString, Any}}, Dict{ASCIIString, Any}}()
+        R = Dict{Tuple{Int64, Dict{ASCIIString, Any}}, Dict{ASCIIString, Any}}()
 
         if bParallel
             if true
@@ -343,7 +343,7 @@ function runExpBatch(; bParallel::Bool = false)
                         expected_returns[id] = result[3]
                     end
 
-                    D[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
+                    R[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "nloop_max" => nloop_max, "nloop_min" => nloop_min, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
                 end
 
             else
@@ -354,7 +354,7 @@ function runExpBatch(; bParallel::Bool = false)
                     opt_dist = result[2]
                     expected_returns = result[3]
 
-                    D[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
+                    R[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "nloop_max" => nloop_max, "nloop_min" => nloop_min, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
                 end
 
             end
@@ -362,25 +362,58 @@ function runExpBatch(; bParallel::Bool = false)
         else
             for tree_policy in tree_policies
                 opt_dist, expected_returns = runExp(scenario, mf_seed_list, mcts_seed_list, tree_policy, N, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min)
-                D[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
+                R[(scenario, tree_policy)] = Dict("mf_seed_list" => mf_seed_list, "mcts_seed_list" => mcts_seed_list, "N" => N, "nx" => nx, "ny" => ny, "nloop_max" => nloop_max, "nloop_min" => nloop_min, "opt_dist" => opt_dist, "expected_returns" => expected_returns)
             end
 
         end
 
         if isfile("exp.jld")
-            D_ = load("exp.jld", "DATA");
+            D = load("exp.jld");
+            Scenarios = D["Scenarios"]
+            TreePolicies = D["TreePolicies"]
+            Results = D["Results"]
 
-            for (key, experiment) in D
+            for (key, experiment) in R
                 scenario, tree_policy = key
-                D_[(scenario, tree_policy)] = experiment
+
+                if !(scenario in Scenarios)
+                    push!(Scenarios, scenario)
+                    TreePolicies[scenario] = Dict{ASCIIString, Any}[]
+                end
+
+                bExist = false
+                for tp in TreePolicies[scenario]
+                    # assume anonymous functions are the same
+                    if string(tree_policy) == string(tp)
+                        bExist = true
+                        break
+                    end
+                end
+                
+                if !bExist
+                    push!(TreePolicies[scenario], tree_policy)
+                end
+
+                Results[(scenario, tree_policy)] = experiment
             end
 
         else
-            D_ = D
+            Scenarios = Int64[scenario]
+
+            TreePolicies = Dict{Int64, Vector{Dict{ASCIIString, Any}}}()
+            TreePolicies[scenario] = Dict{ASCIIString, Any}[]
+
+            for (key, experiment) in R
+                scenario, tree_policy = key
+
+                push!(TreePolicies[scenario], tree_policy)
+            end
+
+            Results = R
 
         end
 
-        save("exp.jld", "DATA", D_)
+        save("exp.jld", "Scenarios", Scenarios, "TreePolicies", TreePolicies, "Results", Results)
     end
 end
 

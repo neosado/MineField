@@ -309,7 +309,7 @@ function runExpBatch(; bParallel::Bool = false)
     srand(12)
     nScenarios = 30
 
-    tree_policies = Dict{ASCIIString, Any}[Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.), Dict("type" => :TS), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001)), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.)])]
+    tree_policies = Dict{ASCIIString, Any}[Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.), Dict("type" => :TS), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001)), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :UCB1, "c" => 300.)]), Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 1.), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -50., 1., 1 / 2, 1 / (2 * (1 / abs(5) ^ 2)), -500., -1000., 1., 1 / 2, 0.001))])]
 
     nloop_max = 1000000
     nloop_min = 100

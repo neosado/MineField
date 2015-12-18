@@ -369,6 +369,7 @@ function runExpBatch(; bParallel::Bool = false)
 
         if isfile("exp.jld")
             D = load("exp.jld");
+
             Scenarios = D["Scenarios"]
             TreePolicies = D["TreePolicies"]
             Results = D["Results"]
@@ -376,38 +377,38 @@ function runExpBatch(; bParallel::Bool = false)
             for (key, experiment) in R
                 scenario, tree_policy = key
 
+                tp_ = tree_policy
+
                 if !(scenario in Scenarios)
                     push!(Scenarios, scenario)
-                    TreePolicies[scenario] = Dict{ASCIIString, Any}[]
-                end
+                    TreePolicies[scenario] = tree_policies
 
-                bExist = false
-                for tp in TreePolicies[scenario]
-                    # assume anonymous functions are the same
-                    if string(tree_policy) == string(tp)
-                        bExist = true
-                        break
+                else
+                    bExist = false
+
+                    for tp in TreePolicies[scenario]
+                        # assume anonymous functions are the same
+                        if string(tree_policy) == string(tp)
+                            bExist = true
+                            tp_ = tp
+                            break
+                        end
                     end
-                end
-                
-                if !bExist
-                    push!(TreePolicies[scenario], tree_policy)
+
+                    if !bExist
+                        push!(TreePolicies[scenario], tree_policy)
+                    end
+
                 end
 
-                Results[(scenario, tree_policy)] = experiment
+                Results[(scenario, tp_)] = experiment
             end
 
         else
             Scenarios = Int64[scenario]
 
             TreePolicies = Dict{Int64, Vector{Dict{ASCIIString, Any}}}()
-            TreePolicies[scenario] = Dict{ASCIIString, Any}[]
-
-            for (key, experiment) in R
-                scenario, tree_policy = key
-
-                push!(TreePolicies[scenario], tree_policy)
-            end
+            TreePolicies[scenario] = tree_policies
 
             Results = R
 

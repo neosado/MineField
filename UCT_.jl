@@ -25,6 +25,7 @@ type TreePolicyParams
 
     bUCB1::Bool
     bUCB1_::Bool
+    bUCB1s::Bool
     c::Float64
 
     bUCB1_tuned::Bool
@@ -55,6 +56,7 @@ type TreePolicyParams
         self.bUCBLike = false
 
         self.bUCB1_ = false
+        self.bUCB1s = false
         self.bTS = false
         self.bTSM = false
         self.bAUCB = false
@@ -75,6 +77,14 @@ type TreePolicyParams
 
         elseif tree_policy["type"] == :UCB1_
             self.bUCB1_ = true
+            if haskey(tree_policy, "c")
+                self.c = tree_policy["c"]
+            else
+                self.c = sqrt(2)
+            end
+
+        elseif tree_policy["type"] == :UCB1s
+            self.bUCB1s = true
             if haskey(tree_policy, "c")
                 self.c = tree_policy["c"]
             else
@@ -285,6 +295,8 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
                     if alg.tree_policy.bUCB1_
                         alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c)
+                    elseif alg.tree_policy.bUCB1s
+                        alg.TP[s] = UCB1sPolicy(pm, feasible_actions, c = alg.tree_policy.c)
                     elseif alg.tree_policy.bTS
                         alg.TP[s] = TSPolicy(pm, feasible_actions)
                     elseif alg.tree_policy.bTSM
@@ -336,6 +348,8 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
             if alg.tree_policy.bUCB1_
                 alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c)
+            elseif alg.tree_policy.bUCB1s
+                alg.TP[s] = UCB1sPolicy(pm, feasible_actions, c = alg.tree_policy.c)
             elseif alg.tree_policy.bTS
                 alg.TP[s] = TSPolicy(pm, feasible_actions)
             elseif alg.tree_policy.bTSM
@@ -410,6 +424,8 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
     else
         if alg.tree_policy.bAUCB
             a, Qv, sindex = TreePolicyLib.selectAction(alg.TP[s], pm)
+        elseif alg.tree_policy.bUCB1s
+            a, Qv = TreePolicyLib.selectAction(alg.TP[s], pm, d)
         else
             a, Qv = TreePolicyLib.selectAction(alg.TP[s], pm)
         end

@@ -6,7 +6,7 @@ VERSION >= v"0.4" && __precompile__(false)
 
 module TreePolicyLib
 
-export TreePolicy, UCB1Policy, TSPolicy, TSMPolicy, AUCBPolicy
+export TreePolicy, UCB1Policy, UCB1sPolicy, TSPolicy, TSMPolicy, AUCBPolicy
 export selectAction, updatePolicy
 
 
@@ -77,6 +77,74 @@ function selectAction(policy::UCB1Policy, pm::MDP)
 end
 
 function updatePolicy(policy::UCB1Policy, pm::MDP, a::Action, q::Float64)
+
+    @test policy.feasible_actions[a]
+
+    policy.N_total += 1
+    policy.N[a] += 1
+    policy.Q[a] += (q - policy.Q[a]) / policy.N[a]
+end
+
+
+#
+# UCB1s
+#
+
+type UCB1sPolicy <: TreePolicy
+
+    feasible_actions::Dict{Action, Bool}
+
+    c::Float64
+
+    N_total::Int64
+    N::Dict{Action, Int64}
+    Q::Dict{Action, Float64}
+    
+
+    function UCB1sPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}; c::Float64 = sqrt(2))
+
+        @test pm.reward_min != -Inf
+        @test pm.reward_max != Inf
+
+        self = new()
+
+        self.feasible_actions = copy(feasible_actions)
+
+        self.c = c
+
+        self.N_total = 0
+        self.N = Dict{Action, Int64}()
+        self.Q = Dict{Action, Float64}()
+
+        for a in pm.actions
+            self.N[a] = 0
+            self.Q[a] = 0.
+        end
+        
+        return self
+    end
+end
+
+function selectAction(policy::UCB1sPolicy, pm::MDP, d::Int64)
+
+    Qv = zeros(pm.nActions)
+
+    for i = 1:pm.nActions
+        if !policy.feasible_actions[pm.actions[i]]
+            Qv[i] = -Inf
+        elseif policy.N[pm.actions[i]] == 0
+            Qv[i] = Inf
+        else
+            Qv[i] = policy.Q[pm.actions[i]] + policy.c * sqrt((pm.reward_max - pm.reward_min) * d) * sqrt(log(policy.N_total) / policy.N[pm.actions[i]])
+        end
+    end
+
+    k = argmax(Qv)
+
+    return pm.actions[k], Qv
+end
+
+function updatePolicy(policy::UCB1sPolicy, pm::MDP, a::Action, q::Float64)
 
     @test policy.feasible_actions[a]
 

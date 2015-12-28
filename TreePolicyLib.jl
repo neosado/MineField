@@ -6,7 +6,7 @@ VERSION >= v"0.4" && __precompile__(false)
 
 module TreePolicyLib
 
-export TreePolicy, UCB1Policy, UCB1sPolicy, TSPolicy, TSMPolicy, AUCBPolicy
+export TreePolicy, UCB1Policy, TSPolicy, TSMPolicy, AUCBPolicy
 export selectAction, updatePolicy
 
 
@@ -31,18 +31,27 @@ type UCB1Policy <: TreePolicy
 
     c::Float64
 
+    bScale::Bool
+
     N_total::Int64
     N::Dict{Action, Int64}
     Q::Dict{Action, Float64}
     
 
-    function UCB1Policy(pm::MDP, feasible_actions::Dict{Action, Bool}; c::Float64 = sqrt(2))
+    function UCB1Policy(pm::MDP, feasible_actions::Dict{Action, Bool}; c::Float64 = sqrt(2), bScale::Bool = false)
 
         self = new()
 
         self.feasible_actions = copy(feasible_actions)
 
         self.c = c
+
+        self.bScale = bScale
+
+        if bScale
+            @test pm.reward_min != -Inf
+            @test pm.reward_max != Inf
+        end
 
         self.N_total = 0
         self.N = Dict{Action, Int64}()
@@ -57,7 +66,7 @@ type UCB1Policy <: TreePolicy
     end
 end
 
-function selectAction(policy::UCB1Policy, pm::MDP)
+function selectAction(policy::UCB1Policy, pm::MDP; d::Union{Int64, Void} = nothing)
 
     Qv = zeros(pm.nActions)
 
@@ -67,7 +76,12 @@ function selectAction(policy::UCB1Policy, pm::MDP)
         elseif policy.N[pm.actions[i]] == 0
             Qv[i] = Inf
         else
-            Qv[i] = policy.Q[pm.actions[i]] + policy.c * sqrt(log(policy.N_total) / policy.N[pm.actions[i]])
+            if !policy.bScale
+                Qv[i] = policy.Q[pm.actions[i]] + policy.c * sqrt(log(policy.N_total) / policy.N[pm.actions[i]])
+            else
+                @test d != nothing
+                Qv[i] = policy.Q[pm.actions[i]] + policy.c * sqrt((pm.reward_max - pm.reward_min) * d) * sqrt(log(policy.N_total) / policy.N[pm.actions[i]])
+            end
         end
     end
 
@@ -77,74 +91,6 @@ function selectAction(policy::UCB1Policy, pm::MDP)
 end
 
 function updatePolicy(policy::UCB1Policy, pm::MDP, a::Action, q::Float64)
-
-    @test policy.feasible_actions[a]
-
-    policy.N_total += 1
-    policy.N[a] += 1
-    policy.Q[a] += (q - policy.Q[a]) / policy.N[a]
-end
-
-
-#
-# UCB1s
-#
-
-type UCB1sPolicy <: TreePolicy
-
-    feasible_actions::Dict{Action, Bool}
-
-    c::Float64
-
-    N_total::Int64
-    N::Dict{Action, Int64}
-    Q::Dict{Action, Float64}
-    
-
-    function UCB1sPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}; c::Float64 = sqrt(2))
-
-        @test pm.reward_min != -Inf
-        @test pm.reward_max != Inf
-
-        self = new()
-
-        self.feasible_actions = copy(feasible_actions)
-
-        self.c = c
-
-        self.N_total = 0
-        self.N = Dict{Action, Int64}()
-        self.Q = Dict{Action, Float64}()
-
-        for a in pm.actions
-            self.N[a] = 0
-            self.Q[a] = 0.
-        end
-        
-        return self
-    end
-end
-
-function selectAction(policy::UCB1sPolicy, pm::MDP, d::Int64)
-
-    Qv = zeros(pm.nActions)
-
-    for i = 1:pm.nActions
-        if !policy.feasible_actions[pm.actions[i]]
-            Qv[i] = -Inf
-        elseif policy.N[pm.actions[i]] == 0
-            Qv[i] = Inf
-        else
-            Qv[i] = policy.Q[pm.actions[i]] + policy.c * sqrt((pm.reward_max - pm.reward_min) * d) * sqrt(log(policy.N_total) / policy.N[pm.actions[i]])
-        end
-    end
-
-    k = argmax(Qv)
-
-    return pm.actions[k], Qv
-end
-
-function updatePolicy(policy::UCB1sPolicy, pm::MDP, a::Action, q::Float64)
 
     @test policy.feasible_actions[a]
 
@@ -187,7 +133,7 @@ type TSPolicy <: TreePolicy
     end
 end
 
-function selectAction(policy::TSPolicy, pm::MDP)
+function selectAction(policy::TSPolicy, pm::MDP; d::Union{Int64, Void} = nothing)
 
     theta = zeros(pm.nActions)
 
@@ -251,7 +197,7 @@ type TSMPolicy <: TreePolicy
     end
 end
 
-function selectAction(policy::TSMPolicy, pm::MDP)
+function selectAction(policy::TSMPolicy, pm::MDP; d::Union{Int64, Void} = nothing)
 
     theta = zeros(pm.nActions)
 
@@ -287,13 +233,15 @@ type AUCBPolicy <: TreePolicy
     subpolicies::Array{TreePolicy}
     nSubpolicies::Int64
 
+    bScale::Bool
+
     N_total::Int64
     N::Vector{Int64}
     Q::Vector{Float64}
     X2::Vector{Float64}
     
 
-    function AUCBPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}, subpolicies::Vector{Dict{ASCIIString, Any}}; control_policy::Dict{ASCIIString, Any} = Dict("type" => :TSN))
+    function AUCBPolicy(pm::MDP, feasible_actions::Dict{Action, Bool}, subpolicies::Vector{Dict{ASCIIString, Any}}; control_policy::Dict{ASCIIString, Any} = Dict("type" => :TSN), bScale::Bool = false)
 
         self = new()
 
@@ -301,6 +249,8 @@ type AUCBPolicy <: TreePolicy
 
         self.nSubpolicies = length(subpolicies)
         self.subpolicies = Array(TreePolicy, self.nSubpolicies)
+
+        self.bScale = bScale
 
         i = 1
         for subpolicy in subpolicies
@@ -310,7 +260,7 @@ type AUCBPolicy <: TreePolicy
                 else
                     c = sqrt(2)
                 end
-                self.subpolicies[i] = UCB1Policy(pm, feasible_actions, c = c)
+                self.subpolicies[i] = UCB1Policy(pm, feasible_actions, c = c, bScale = bScale)
 
             elseif subpolicy["type"] == :TS
                 self.subpolicies[i] = TSPolicy(pm, feasible_actions)
@@ -335,7 +285,7 @@ type AUCBPolicy <: TreePolicy
     end
 end
 
-function selectAction(policy::AUCBPolicy, pm::MDP)
+function selectAction(policy::AUCBPolicy, pm::MDP; d::Union{Int64, Void} = nothing)
 
     Qv = zeros(policy.nSubpolicies)
 
@@ -350,7 +300,12 @@ function selectAction(policy::AUCBPolicy, pm::MDP)
             if policy.N[i] == 0
                 Qv[i] = Inf
             else
-                Qv[i] = policy.Q[i] + c * sqrt(log(policy.N_total) / policy.N[i])
+                if !policy.bScale
+                    Qv[i] = policy.Q[i] + c * sqrt(log(policy.N_total) / policy.N[i])
+                else
+                    @test d != nothing
+                    Qv[i] = policy.Q[i] + c * sqrt((pm.reward_max - pm.reward_min) * d) * sqrt(log(policy.N_total) / policy.N[i])
+                end
             end
         end
 
@@ -381,11 +336,15 @@ function selectAction(policy::AUCBPolicy, pm::MDP)
                 end
             end
         end
+
+    else
+        error("Unknown control policy type, ", policy.control_policy["type"])
+
     end
 
     subpolicy_index = argmax(Qv)
 
-    return selectAction(policy.subpolicies[subpolicy_index], pm)..., subpolicy_index
+    return selectAction(policy.subpolicies[subpolicy_index], pm, d = d)..., subpolicy_index
 end
 
 function updatePolicy(policy::AUCBPolicy, pm::MDP, a::Action, q::Float64, subpolicy_index::Int64)

@@ -28,9 +28,36 @@ function init_cluster(parallel::Symbol = :local_)
 end
 
 
-init_cluster()
-@everywhere include("simMineField.jl")
+bParallel = true
+parallel = :local_
 
-runExpBatch(bParallel = true)
+bAppend = false
+
+if "parallel" in ARGS
+    bParallel = true
+elseif "serial" in ARGS
+    bParallel = false
+end
+
+if "local" in ARGS
+    parallel = :local_
+elseif "remote" in ARGS
+    parallel = :remote
+elseif "both" in ARGS
+    parallel = :both
+end
+
+if "append" in ARGS
+    bAppend = true
+end
+
+if bParallel
+    init_cluster(parallel)
+    @everywhere include("simMineField.jl")
+else
+    include("simMineField.jl")
+end
+
+runExpBatch(bParallel = bParallel, bAppend = bAppend)
 
 

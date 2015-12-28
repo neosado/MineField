@@ -25,7 +25,6 @@ type TreePolicyParams
 
     bUCB1::Bool
     bUCB1_::Bool
-    bUCB1s::Bool
     c::Float64
 
     bUCB1_tuned::Bool
@@ -44,6 +43,8 @@ type TreePolicyParams
     subpolicies::Vector{Dict{ASCIIString, Any}}
     control_policy::Dict{ASCIIString, Any}
 
+    bUCBScale::Bool
+
 
     function TreePolicyParams(tree_policy::Any = nothing)
 
@@ -56,10 +57,11 @@ type TreePolicyParams
         self.bUCBLike = false
 
         self.bUCB1_ = false
-        self.bUCB1s = false
         self.bTS = false
         self.bTSM = false
         self.bAUCB = false
+
+        self.bUCBScale = false
 
         if tree_policy == nothing
             self.bUCB1 = true
@@ -77,14 +79,6 @@ type TreePolicyParams
 
         elseif tree_policy["type"] == :UCB1_
             self.bUCB1_ = true
-            if haskey(tree_policy, "c")
-                self.c = tree_policy["c"]
-            else
-                self.c = sqrt(2)
-            end
-
-        elseif tree_policy["type"] == :UCB1s
-            self.bUCB1s = true
             if haskey(tree_policy, "c")
                 self.c = tree_policy["c"]
             else
@@ -124,6 +118,10 @@ type TreePolicyParams
         else
             error("Unknown tree policy type, ", tree_policy["type"])
 
+        end
+
+        if haskey(tree_policy, "bScale")
+            self.bUCBScale = tree_policy["bScale"]
         end
 
         return self
@@ -294,15 +292,13 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
                     end
 
                     if alg.tree_policy.bUCB1_
-                        alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c)
-                    elseif alg.tree_policy.bUCB1s
-                        alg.TP[s] = UCB1sPolicy(pm, feasible_actions, c = alg.tree_policy.c)
+                        alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c, bScale = alg.tree_policy.bUCBScale)
                     elseif alg.tree_policy.bTS
                         alg.TP[s] = TSPolicy(pm, feasible_actions)
                     elseif alg.tree_policy.bTSM
                         alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.arm_reward_model)
                     elseif alg.tree_policy.bAUCB
-                        alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy)
+                        alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy, bScale = alg.tree_policy.bUCBScale)
                     end
                 end
             end
@@ -347,15 +343,13 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
             end
 
             if alg.tree_policy.bUCB1_
-                alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c)
-            elseif alg.tree_policy.bUCB1s
-                alg.TP[s] = UCB1sPolicy(pm, feasible_actions, c = alg.tree_policy.c)
+                alg.TP[s] = UCB1Policy(pm, feasible_actions, c = alg.tree_policy.c, bScale = alg.tree_policy.bUCBScale)
             elseif alg.tree_policy.bTS
                 alg.TP[s] = TSPolicy(pm, feasible_actions)
             elseif alg.tree_policy.bTSM
                 alg.TP[s] = TSMPolicy(pm, feasible_actions, alg.tree_policy.arm_reward_model)
             elseif alg.tree_policy.bAUCB
-                alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy)
+                alg.TP[s] = AUCBPolicy(pm, feasible_actions, alg.tree_policy.subpolicies, control_policy = alg.tree_policy.control_policy, bScale = alg.tree_policy.bUCBScale)
             end
         end
 
@@ -394,7 +388,11 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
             else
                 if alg.tree_policy.bUCB1
-                    Qv[i] = alg.Q[(s, a)] + alg.tree_policy.c * sqrt(log(alg.Ns[s]) / alg.N[(s, a)])
+                    if !alg.tree_policy.bUCBScale
+                        Qv[i] = alg.Q[(s, a)] + alg.tree_policy.c * sqrt(log(alg.Ns[s]) / alg.N[(s, a)])
+                    else
+                        Qv[i] = alg.Q[(s, a)] + alg.tree_policy.c * sqrt((pm.reward_max - pm.reward_min) * d) * sqrt(log(alg.Ns[s]) / alg.N[(s, a)])
+                    end
 
                 elseif alg.tree_policy.bUCB1_tuned || alg.tree_policy.bUCB_V
                     if alg.N[(s, a)] > 1
@@ -423,11 +421,9 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
     else
         if alg.tree_policy.bAUCB
-            a, Qv, sindex = TreePolicyLib.selectAction(alg.TP[s], pm)
-        elseif alg.tree_policy.bUCB1s
-            a, Qv = TreePolicyLib.selectAction(alg.TP[s], pm, d)
+            a, Qv, sindex = TreePolicyLib.selectAction(alg.TP[s], pm, d = d)
         else
-            a, Qv = TreePolicyLib.selectAction(alg.TP[s], pm)
+            a, Qv = TreePolicyLib.selectAction(alg.TP[s], pm, d = d)
         end
 
     end

@@ -306,13 +306,11 @@ function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_s
 end
 
 
-function expBatchWorker(nx::Int64, ny::Int64, nScenarios::Int64, tree_policies, nloop_min::Int64, nloop_max::Int64, N::Int64; bParallel::Bool = false, datafile::ASCIIString = "exp.jld", bAppend::Bool = false)
+function expBatchWorker(scenarios::Vector{Int64}, nx::Int64, ny::Int64, tree_policies, nloop_min::Int64, nloop_max::Int64, N::Int64; bParallel::Bool = false, datafile::ASCIIString = "exp.jld", bAppend::Bool = false)
 
     if !bAppend && isfile(datafile)
         rm(datafile)
     end
-
-    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
 
     for scenario in scenarios
         println("Scenario: ", scenario)
@@ -422,6 +420,8 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
     srand(12)
     nScenarios = 10
 
+    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
+
     # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
     tree_policies = Dict{ASCIIString, Any}[
         Dict("type" => :UCB1, "c" => 100),
@@ -438,8 +438,43 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
 
     datafile = "exp.jld"
 
-    expBatchWorker(nx, ny, nScenarios, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
+    expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
 end
+
+
+#function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
+#
+#    nx = 7
+#    ny = 5
+#
+#    srand(12)
+#    nScenarios = 1000
+#
+#    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
+#
+#    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
+#    tree_policies = Dict{ASCIIString, Any}[
+#    Dict("type" => :UCB1, "c" => 100),
+#    Dict("type" => :UCB1, "c" => 10000),
+#    Dict("type" => :TS),
+#    Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),  
+#    Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+#    ]
+#
+#    nloop_min = 100
+#
+#    N = 1000
+#
+#    for nloop_max in [100, 1000, 10000, 100000, 1000000] 
+#        println("nloop_max: ", nloop_max)
+#
+#        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
+#
+#        expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
+#
+#        println()
+#    end
+#end 
 
 
 if false

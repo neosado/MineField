@@ -256,7 +256,7 @@ type AUCBPolicy <: TreePolicy
         for subpolicy in subpolicies
             if subpolicy["type"] == :UCB1
                 if haskey(subpolicy, "c")
-                    c = subpolicy["c"]
+                    c = Float64(subpolicy["c"])
                 else
                     c = sqrt(2)
                 end

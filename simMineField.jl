@@ -252,8 +252,8 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
 
     for i = 1:nx
         for j = 1:ny
-            if rand(rng) < 0.1
-                p = rand(rng) / 10
+            if rand(rng) < 0.2
+                p = rand(rng) * 0.1
             else
                 p = 0.
             end
@@ -306,32 +306,10 @@ function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_s
 end
 
 
-function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
+function expBatchWorker(nx::Int64, ny::Int64, nScenarios::Int64, tree_policies, nloop_min::Int64, nloop_max::Int64, N::Int64; bParallel::Bool = false, datafile::ASCIIString = "exp.jld", bAppend::Bool = false)
 
-    nx = 7
-    ny = 5
-
-    srand(12)
-    nScenarios = 30
-
-    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
-    tree_policies = Dict{ASCIIString, Any}[
-        Dict("type" => :UCB1, "c" => 100.),
-        Dict("type" => :UCB1, "c" => 10000.),
-        Dict("type" => :TS),
-        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
-        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100.), Dict("type" => :UCB1, "c" => 10000.)]),
-        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100.), Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2))))])
-    ]
-
-    nloop_max = 1000000
-    nloop_min = 100
-
-    N = 100
-
-
-    if !bAppend && isfile("exp.jld")
-        rm("exp.jld")
+    if !bAppend && isfile(datafile)
+        rm(datafile)
     end
 
     scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
@@ -384,8 +362,8 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
 
         end
 
-        if isfile("exp.jld")
-            D = load("exp.jld");
+        if isfile(datafile)
+            D = load(datafile)
 
             Scenarios = D["Scenarios"]
             TreePolicies = D["TreePolicies"]
@@ -431,8 +409,36 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
 
         end
 
-        save("exp.jld", "Scenarios", Scenarios, "TreePolicies", TreePolicies, "Results", Results)
+        save(datafile, "Scenarios", Scenarios, "TreePolicies", TreePolicies, "Results", Results)
     end
+end
+
+
+function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
+
+    nx = 7
+    ny = 5
+
+    srand(12)
+    nScenarios = 10
+
+    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
+    tree_policies = Dict{ASCIIString, Any}[
+        Dict("type" => :UCB1, "c" => 100),
+        Dict("type" => :UCB1, "c" => 10000),
+        Dict("type" => :TS),
+        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
+        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+    ]
+
+    nloop_min = 100
+    nloop_max = 1000000
+
+    N = 100
+
+    datafile = "exp.jld"
+
+    expBatchWorker(nx, ny, nScenarios, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
 end
 
 
@@ -464,13 +470,13 @@ if false
     println("Maximum Return: ", neat(-distance))
     println()
 
-    tree_policy = Dict("type" => :UCB1, "c" => 100.)
-    #tree_policy = Dict("type" => :UCB1_, "c" => 100.)
+    tree_policy = Dict("type" => :UCB1, "c" => 100)
+    #tree_policy = Dict("type" => :UCB1_, "c" => 100)
     #tree_policy = Dict("type" => :UCB1s)
     #tree_policy = Dict("type" => :TS)
     # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
     #tree_policy = Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2))))
-    #tree_policy = Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100.), Dict("type" => :UCB1, "c" => 10000.)])
+    #tree_policy = Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
 
     alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = tree_policy, visualizer = MCTSVisualizer())
 

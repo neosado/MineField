@@ -457,7 +457,7 @@ end
 #    Dict("type" => :UCB1, "c" => 100),
 #    Dict("type" => :UCB1, "c" => 10000),
 #    Dict("type" => :TS),
-#    Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),  
+#    Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
 #    Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
 #    ]
 #
@@ -465,7 +465,7 @@ end
 #
 #    N = 1000
 #
-#    for nloop_max in [100, 1000, 10000, 100000, 1000000] 
+#    for nloop_max in [100, 1000, 10000, 100000, 1000000]
 #        println("nloop_max: ", nloop_max)
 #
 #        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
@@ -474,7 +474,7 @@ end
 #
 #        println()
 #    end
-#end 
+#end
 
 
 if false

@@ -454,11 +454,11 @@ end
 #
 #    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
 #    tree_policies = Dict{ASCIIString, Any}[
-#    Dict("type" => :UCB1, "c" => 100),
-#    Dict("type" => :UCB1, "c" => 10000),
-#    Dict("type" => :TS),
-#    Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
-#    Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+#        Dict("type" => :UCB1, "c" => 100),
+#        Dict("type" => :UCB1, "c" => 10000),
+#        Dict("type" => :TS),
+#        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
+#        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
 #    ]
 #
 #    nloop_min = 100

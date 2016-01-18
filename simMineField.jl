@@ -197,7 +197,7 @@ function simulate(pm, alg; draw::Bool = false, wait::Bool = false, debug::Int64 
         R += r
 
         if debug > 0
-            if debug > 2
+            if debug > 3
                 for a__ in pm.actions
                     println(string(a__), ": ", alg.N[(s, a__)]) 
                 end
@@ -483,7 +483,7 @@ if false
 
     reward_seed = 23
     mf_seed = round(Int64, time())
-    mcts_seed = round(Int64, time())
+    mcts_seed = round(Int64, time()) + 1
 
 
     println("nx: ", nx, ", ny: ", ny)

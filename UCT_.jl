@@ -28,6 +28,7 @@ type TreePolicyParams
     c::Float64
 
     bUCB1_tuned::Bool
+    ut_c::Float64
 
     bUCB_V::Bool
     uv_c::Float64
@@ -247,7 +248,7 @@ function rollout_default(alg::UCT, pm::MDP, s::State, d::Int64; rgamma::Float64 
 
     a = default_policy(pm, s)
 
-    if debug > 2
+    if debug > 3
         print(string(a), ", ")
     end
 
@@ -356,7 +357,15 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
         alg.T[s] = true
         alg.Ns[s] = 0
 
+        if debug > 3 && alg.rollout_type == :default
+            print("    ")
+        end
+
         ro = alg.rollout_func(alg, pm, s, d, debug = debug)
+
+        if debug > 3 && alg.rollout_type == :default
+            println()
+        end
 
         if debug > 2
             println("    rollout: ", neat(ro * pm.reward_norm_const))
@@ -367,6 +376,12 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
 
     if debug > 2
         println("    found node: ", s, " at level ", d)
+    end
+
+    Q = Array(Float64, pm.nAction)
+    for i = 1:pm.nActions
+        a = pm.actions[i]
+        Q[i] = alg.Q[(s, a)]
     end
 
     Qv = Array(Float64, pm.nActions)
@@ -504,7 +519,7 @@ function selectAction(alg::UCT, pm::MDP, s::State; debug::Int64 = 0)
 
         simulate(alg, pm, s, alg.depth, debug = debug)
 
-        #println("h: ", h)
+        #println("s: ", s)
         #println("T: ", alg.T)
         #println("Ns: ", alg.Ns)
         #println("N: ", alg.N)

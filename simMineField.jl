@@ -15,6 +15,8 @@ using Dist_
 using ArmRewardModel_
 using Util
 
+using CEOpt_
+
 using Distributions
 using Base.Collections
 using JLD
@@ -252,7 +254,7 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
 
     for i = 1:nx
         for j = 1:ny
-            if rand(rng) < 0.2
+            if rand(rng) < 0.1
                 p = rand(rng) * 0.1
             else
                 p = 0.
@@ -272,10 +274,52 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
 end
 
 
+function drawSample(p)
+
+    return rand(Truncated(Normal(p[1], p[2]), 0, Inf))
+end
+
+function computePerf_(reward_seed::Int64, nx::Int64, ny::Int64, nloop_min::Int64, nloop_max::Int64, x)
+
+    Reward = generateRewardMap(nx, ny, seed = reward_seed)
+
+    pm = MineField(nx, ny, Reward = Reward)
+
+    alg = UCT(depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = Dict("type" => :UCB1, "c" => x))
+
+    R, actions, path, expected_return = simulate(pm, alg)
+
+    return expected_return
+end
+
+computePerf(reward_seed, nx, ny, nloop_min, nloop_max) = (x) -> computePerf_(reward_seed, nx, ny, nloop_min, nloop_max, x)
+
+function updateParam(X, S, gamma_)
+
+    I = map((x) -> x >= gamma_ ? 1 : 0, S)
+
+    p = Array(Float64, 2)
+    p[1] = sum(I .* X) / sum(I)
+    p[2]= sqrt(sum(I .* (X - p[1]).^2) / sum(I))
+
+    return p
+end
+
+
 function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_seed::Union{Int64, Vector{Int64}}, tree_policy::Any, N::Int64; nx::Int64 = 5, ny::Int64 = 5, nloop_min::Int64 = 100, nloop_max::Int64 = 1000, bParallel::Bool = false, id::Any = nothing)
 
     @assert length(mf_seed) == N
     @assert length(mcts_seed) == N
+
+    if tree_policy["type"] == :UCB1withCE
+        p = CEOpt(drawSample, [100, 1000], computePerf(reward_seed, nx, ny, nloop_min, nloop_max), updateParam, 100, 0.0460517)
+        tree_policy_ = Dict("type" => :UCB1, "c" => p[1])
+
+    else
+        tree_policy_ = tree_policy
+
+    end
+
 
     expected_returns = zeros(N)
 
@@ -287,7 +331,7 @@ function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_s
     for i = 1:N
         pm = MineField(nx, ny, seed = mf_seed[i], Reward = Reward)
 
-        alg = UCT(seed = mcts_seed[i], depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = tree_policy)
+        alg = UCT(seed = mcts_seed[i], depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = tree_policy_)
 
         R, actions, path, expected_return = simulate(pm, alg)
 
@@ -428,7 +472,8 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
         Dict("type" => :UCB1, "c" => 10000),
         Dict("type" => :TS),
         Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
-        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)]),
+        Dict("type" => :UCB1withCE)
     ]
 
     nloop_min = 100
@@ -458,14 +503,15 @@ end
 #        Dict("type" => :UCB1, "c" => 10000),
 #        Dict("type" => :TS),
 #        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
-#        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+#        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)]),
+#        Dict("type" => :UCB1withCE)
 #    ]
 #
 #    nloop_min = 100
 #
 #    N = 1000
 #
-#    for nloop_max in [100, 1000, 10000, 100000, 1000000]
+#    for nloop_max in [100, 1000, 10000, 100000]
 #        println("nloop_max: ", nloop_max)
 #
 #        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
@@ -512,6 +558,10 @@ if false
     # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
     #tree_policy = Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2))))
     #tree_policy = Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)])
+
+    #p = CEOpt(drawSample, [100, 1000], computePerf(reward_seed, nx, ny, 100, 1000), updateParam, 100, 0.0460517, debug = 1)
+    #println(p)
+    #tree_policy = Dict("type" => :UCB1, "c" => p[1])
 
     alg = UCT(seed = mcts_seed, depth = nx + ny - 2, nloop_max = 1000000, nloop_min = 100, tree_policy = tree_policy, visualizer = MCTSVisualizer())
 

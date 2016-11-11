@@ -378,7 +378,7 @@ function simulate(alg::UCT, pm::MDP, s::State, d::Int64; debug::Int64 = 0)
         println("    found node: ", s, " at level ", d)
     end
 
-    Q = Array(Float64, pm.nAction)
+    Q = Array(Float64, pm.nActions)
     for i = 1:pm.nActions
         a = pm.actions[i]
         Q[i] = alg.Q[(s, a)]

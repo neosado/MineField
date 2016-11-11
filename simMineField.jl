@@ -274,6 +274,41 @@ function generateRewardMap(nx::Int64, ny::Int64; seed::Union{Int64, Void} = noth
 end
 
 
+function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_seed::Union{Int64, Vector{Int64}}, tree_policy::Any, N::Int64; nx::Int64 = 5, ny::Int64 = 5, nloop_min::Int64 = 100, nloop_max::Int64 = 1000, bParallel::Bool = false, id::Any = nothing)
+
+    @assert length(mf_seed) == N
+    @assert length(mcts_seed) == N
+
+
+    expected_returns = zeros(N)
+
+    Reward = generateRewardMap(nx, ny, seed = reward_seed)
+
+    expected_reward_map = computeExpectedRewardMap(Reward)
+    distance, path = computeShortestPath(-expected_reward_map, (1, 1), (nx, ny))
+
+    for i = 1:N
+        pm = MineField(nx, ny, seed = mf_seed[i], Reward = Reward)
+
+        alg = UCT(seed = mcts_seed[i], depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = tree_policy)
+
+        R, actions, path, expected_return = simulate(pm, alg)
+
+        expected_returns[i] = expected_return
+    end
+
+    if N == 1
+        expected_returns = expected_returns[1]
+    end
+
+    if bParallel
+        return id, -distance, expected_returns
+    else
+        return -distance, expected_returns
+    end
+end
+
+
 function drawSample(p)
 
     return rand(Truncated(Normal(p[1], p[2]), 0, Inf))
@@ -306,50 +341,6 @@ function updateParam(X, S, gamma_)
 end
 
 
-function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_seed::Union{Int64, Vector{Int64}}, tree_policy::Any, N::Int64; nx::Int64 = 5, ny::Int64 = 5, nloop_min::Int64 = 100, nloop_max::Int64 = 1000, bParallel::Bool = false, id::Any = nothing)
-
-    @assert length(mf_seed) == N
-    @assert length(mcts_seed) == N
-
-    if tree_policy["type"] == :UCB1withCE
-        p = CEOpt(drawSample, [100, 1000], computePerf(reward_seed, nx, ny, nloop_min, nloop_max), updateParam, 100, 0.0460517)
-        tree_policy_ = Dict("type" => :UCB1, "c" => p[1])
-
-    else
-        tree_policy_ = tree_policy
-
-    end
-
-
-    expected_returns = zeros(N)
-
-    Reward = generateRewardMap(nx, ny, seed = reward_seed)
-
-    expected_reward_map = computeExpectedRewardMap(Reward)
-    distance, path = computeShortestPath(-expected_reward_map, (1, 1), (nx, ny))
-
-    for i = 1:N
-        pm = MineField(nx, ny, seed = mf_seed[i], Reward = Reward)
-
-        alg = UCT(seed = mcts_seed[i], depth = nx + ny - 2, nloop_max = nloop_max, nloop_min = nloop_min, tree_policy = tree_policy_)
-
-        R, actions, path, expected_return = simulate(pm, alg)
-
-        expected_returns[i] = expected_return
-    end
-
-    if N == 1
-        expected_returns = expected_returns[1]
-    end
-
-    if bParallel
-        return id, -distance, expected_returns
-    else
-        return -distance, expected_returns
-    end
-end
-
-
 function expBatchWorker(scenarios::Vector{Int64}, nx::Int64, ny::Int64, tree_policies, nloop_min::Int64, nloop_max::Int64, N::Int64; bParallel::Bool = false, datafile::ASCIIString = "exp.jld", bAppend::Bool = false)
 
     if !bAppend && isfile(datafile)
@@ -369,7 +360,16 @@ function expBatchWorker(scenarios::Vector{Int64}, nx::Int64, ny::Int64, tree_pol
         if bParallel
             if true
                 for tree_policy in tree_policies
-                    results = pmap(id -> runExp(scenario, mf_seed_list[id], mcts_seed_list[id], tree_policy, 1, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min, bParallel = true, id = id), 1:N)
+                    if tree_policy["type"] == :UCB1withCE
+                        p = CEOpt(drawSample, [100, 1000], computePerf(scenario, nx, ny, nloop_min, nloop_max), updateParam, 100, 0.0460517)
+                        tree_policy_ = Dict("type" => :UCB1, "c" => p[1])
+
+                    else
+                        tree_policy_ = tree_policy
+
+                    end
+
+                    results = pmap(id -> runExp(scenario, mf_seed_list[id], mcts_seed_list[id], tree_policy_, 1, nx = nx, ny = ny, nloop_max = nloop_max, nloop_min = nloop_min, bParallel = true, id = id), 1:N)
 
                     opt_dist = 0
                     expected_returns = zeros(N)
@@ -456,44 +456,13 @@ function expBatchWorker(scenarios::Vector{Int64}, nx::Int64, ny::Int64, tree_pol
 end
 
 
-function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
-
-    nx = 7
-    ny = 5
-
-    srand(12)
-    nScenarios = 10
-
-    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
-
-    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
-    tree_policies = Dict{ASCIIString, Any}[
-        Dict("type" => :UCB1, "c" => 100),
-        Dict("type" => :UCB1, "c" => 10000),
-        Dict("type" => :TS),
-        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
-        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)]),
-        Dict("type" => :UCB1withCE)
-    ]
-
-    nloop_min = 100
-    nloop_max = 1000000
-
-    N = 100
-
-    datafile = "exp.jld"
-
-    expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
-end
-
-
 #function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
 #
 #    nx = 7
 #    ny = 5
 #
 #    srand(12)
-#    nScenarios = 1000
+#    nScenarios = 10
 #
 #    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
 #
@@ -508,19 +477,50 @@ end
 #    ]
 #
 #    nloop_min = 100
+#    nloop_max = 1000000
 #
-#    N = 1000
+#    N = 100
 #
-#    for nloop_max in [100, 1000, 10000, 100000]
-#        println("nloop_max: ", nloop_max)
+#    datafile = "exp.jld"
 #
-#        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
-#
-#        expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
-#
-#        println()
-#    end
+#    expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
 #end
+
+
+function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
+
+    nx = 7
+    ny = 5
+
+    srand(12)
+    nScenarios = 100
+
+    scenarios = unique(rand(10000:typemax(Int16), round(Int64, nScenarios * 1.1)))[1:nScenarios]
+
+    # Note: be careful about how to set the reward threshold for a huge negative reward event in sequential decision making
+    tree_policies = Dict{ASCIIString, Any}[
+        Dict("type" => :UCB1, "c" => 100),
+        Dict("type" => :UCB1, "c" => 10000),
+        Dict("type" => :TS),
+        Dict("type" => :TSM, "ARM" => () -> ArmRewardModel(0.01, 0.01, -100., 1., 1 / 2, 1 / (2 * (1 / 10. ^ 2)), -5000., -10000., 1., 1 / 2,  1 / (2 * (1 / 1.^2)))),
+        Dict("type" => :AUCB, "SP" => [Dict("type" => :UCB1, "c" => 100), Dict("type" => :UCB1, "c" => 10000)]),
+        Dict("type" => :UCB1withCE)
+    ]
+
+    nloop_min = 100
+
+    N = 100
+
+    for nloop_max in [100, 1000, 10000, 100000]
+        println("nloop_max: ", nloop_max)
+
+        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
+
+        expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
+
+        println()
+    end
+end
 
 
 if false

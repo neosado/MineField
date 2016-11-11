@@ -108,13 +108,10 @@ if bParallel
     else
         init_cluster(parallel)
     end
-
-    @everywhere include("simMineField.jl")
-
-else
-    include("simMineField.jl")
-
 end
+
+push!(LOAD_PATH, ".")
+using simMineFieldMod
 
 runExpBatch(bParallel = bParallel, bAppend = bAppend)
 

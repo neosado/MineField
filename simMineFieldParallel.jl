@@ -39,7 +39,7 @@ function init_cluster_sherlock()
     end
 
     n = parse(Int64, ENV["SLURM_NTASKS_PER_NODE"])
-    dir = "/home/youngjun/SAPR"
+    dir = "/home/youngjun/MineField"
 
     machines = Tuple{ASCIIString, Int64}[]
 

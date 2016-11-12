@@ -318,7 +318,7 @@ function drawSample(p)
     end
 end
 
-function computePerf_(reward_seed::Int64, nx::Int64, ny::Int64, nloop_min::Int64, nloop_max::Int64, x)
+function computePerf_(reward_seed::Int64, nx::Int64, ny::Int64, nloop_min::Int64, nloop_max::Int64, id, x)
 
     Reward = generateRewardMap(nx, ny, seed = reward_seed)
 
@@ -328,10 +328,14 @@ function computePerf_(reward_seed::Int64, nx::Int64, ny::Int64, nloop_min::Int64
 
     R, actions, path, expected_return = simulate(pm, alg)
 
-    return expected_return
+    if id == nothing
+        return expected_return
+    else
+        return id, expected_return
+    end
 end
 
-computePerf(reward_seed, nx, ny, nloop_min, nloop_max) = (x) -> computePerf_(reward_seed, nx, ny, nloop_min, nloop_max, x)
+computePerf(reward_seed, nx, ny, nloop_min, nloop_max) = (id, x) -> computePerf_(reward_seed, nx, ny, nloop_min, nloop_max, id, x)
 
 function updateParam(X, S, gamma_)
 
@@ -365,7 +369,7 @@ function expBatchWorker(scenarios::Vector{Int64}, nx::Int64, ny::Int64, tree_pol
             if true
                 for tree_policy in tree_policies
                     if tree_policy["type"] == :UCB1withCE
-                        p = CEOpt(drawSample, [100, 1000], computePerf(scenario, nx, ny, nloop_min, nloop_max), updateParam, 100, 0.0460517)
+                        p = CEOpt(drawSample, [100, 1000], computePerf(scenario, nx, ny, nloop_min, nloop_max), updateParam, 100, 0.0460517, bParallel = true)
                         tree_policy_ = Dict("type" => :UCB1, "c" => p[1])
 
                     else

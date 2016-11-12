@@ -279,7 +279,6 @@ function runExp(reward_seed::Int64, mf_seed::Union{Int64, Vector{Int64}}, mcts_s
     @assert length(mf_seed) == N
     @assert length(mcts_seed) == N
 
-
     expected_returns = zeros(N)
 
     Reward = generateRewardMap(nx, ny, seed = reward_seed)

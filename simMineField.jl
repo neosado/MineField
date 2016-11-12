@@ -521,7 +521,7 @@ function runExpBatch(; bParallel::Bool = false, bAppend::Bool = false)
     for nloop_max in [100, 1000, 10000, 100000]
         println("nloop_max: ", nloop_max)
 
-        datafile = "data_ijcai/exp_" * string(nloop_max) * ".jld"
+        datafile = "exp_" * string(nloop_max) * ".jld"
 
         expBatchWorker(scenarios, nx, ny, tree_policies, nloop_min, nloop_max, N, bParallel = bParallel, datafile = datafile, bAppend = bAppend)
 

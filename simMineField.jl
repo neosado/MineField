@@ -311,7 +311,11 @@ end
 
 function drawSample(p)
 
-    return rand(Truncated(Normal(p[1], p[2]), 0, Inf))
+    if p[2] == 0.
+        return p[1]
+    else
+        return rand(Truncated(Normal(p[1], p[2]), 0, Inf))
+    end
 end
 
 function computePerf_(reward_seed::Int64, nx::Int64, ny::Int64, nloop_min::Int64, nloop_max::Int64, x)
